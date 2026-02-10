@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { RefreshCw } from 'lucide-react';
+import { RefreshCw, Ruler } from 'lucide-react';
 
 const FABRIC_COUNTS = [11, 14, 16, 18, 20, 22, 25, 28, 32];
 

@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from 'react';
-import { Upload, Image as ImageIcon, Settings, ArrowRight, Scissors, Ruler, CheckCircle, FileJson } from 'lucide-react';
+import { Upload, Image as ImageIcon, Settings, ArrowRight, Scissors, Ruler, CheckCircle, FileJson, RotateCcw } from 'lucide-react';
 import { processImage } from '../utils/imageProcessing';
 import { generatePDF } from '../utils/pdfGenerator';
 import ImageCropper from './ImageCropper';
@@ -26,10 +26,10 @@ const CreatorDashboard = () => {
     // Settings State
     const [settings, setSettings] = useState({
         count: 14,
-        widthCm: 21.0, // Default to A4 approx
-        heightCm: 29.7,
+        widthCm: 15.0,
+        heightCm: 15.0,
         lockRatio: false,
-        maxColors: 30
+        maxColors: 40
     });
 
     // Session Persistence: Load on Mount
@@ -83,6 +83,23 @@ const CreatorDashboard = () => {
                 setCurrentStep(2); // Go to Adjust step
             };
             reader.readAsDataURL(file);
+        }
+    };
+
+    const handleReset = () => {
+        if (confirm('現在の作業をリセットして新しい画像をアップロードしますか？')) {
+            localStorage.removeItem('creator_session');
+            setOriginalImage(null);
+            setCroppedImage(null);
+            setProcessedData(null);
+            setCurrentStep(1);
+            setSettings({
+                count: 14,
+                widthCm: 15.0,
+                heightCm: 15.0,
+                lockRatio: false,
+                maxColors: 40
+            });
         }
     };
 
@@ -191,6 +208,19 @@ const CreatorDashboard = () => {
 
     return (
         <div className="max-w-6xl mx-auto">
+            {/* Reset Button */}
+            {originalImage && (
+                <div className="flex justify-end mb-4">
+                    <button
+                        onClick={handleReset}
+                        className="flex items-center gap-2 px-4 py-2 bg-white hover:bg-orange-50 text-orange-500 rounded-xl font-bold text-sm transition-colors border border-orange-200 shadow-sm"
+                    >
+                        <RotateCcw className="w-4 h-4" />
+                        新しい画像をアップロード
+                    </button>
+                </div>
+            )}
+
             {/* Progress Stepper */}
             <div className="mb-12">
                 <div className="flex items-center justify-between relative max-w-4xl mx-auto">
@@ -199,9 +229,19 @@ const CreatorDashboard = () => {
                         const Icon = step.icon;
                         const isActive = currentStep >= step.id;
                         const isCurrent = currentStep === step.id;
+                        const canNavigate = (step.id === 1) || (step.id === 2 && originalImage) ||
+                                          (step.id === 3 && originalImage) ||
+                                          (step.id === 4 && originalImage) ||
+                                          (step.id === 5 && processedData);
+
                         return (
-                            <div key={step.id} className="flex flex-col items-center flex-1">
-                                <div className={`step-indicator ${isActive ? 'step-indicator-active' : 'step-indicator-inactive'} mb-3`}>
+                            <div
+                                key={step.id}
+                                className="flex flex-col items-center flex-1"
+                                onClick={() => canNavigate && setCurrentStep(step.id)}
+                                style={{ cursor: canNavigate ? 'pointer' : 'default' }}
+                            >
+                                <div className={`step-indicator ${isActive ? 'step-indicator-active' : 'step-indicator-inactive'} mb-3 transition-transform ${canNavigate ? 'hover:scale-110' : ''}`}>
                                     <Icon className={`w-5 h-5 ${isCurrent ? 'animate-pulse' : ''}`} />
                                 </div>
                                 <span className={`text-[10px] font-black uppercase tracking-widest ${isActive ? 'text-[#ff8a65]' : 'text-orange-200'}`}>
@@ -443,18 +483,103 @@ const CreatorDashboard = () => {
                                 図案の完成！
                             </h3>
 
-                            <div className="space-y-4 text-xs font-bold border-b border-orange-50 pb-6 mb-6">
-                                <div className="flex justify-between items-center bg-orange-50/30 p-2 rounded-xl">
-                                    <span className="text-orange-400">完成サイズ</span>
-                                    <span className="text-[#4e342e]">{settings.widthCm} x {settings.heightCm} cm</span>
+                            {/* Editable Settings */}
+                            <div className="space-y-6 border-b border-orange-50 pb-6 mb-6">
+                                <div className="bg-blue-50/50 p-4 rounded-xl border border-blue-100">
+                                    <p className="text-[10px] text-blue-600 font-bold mb-2 flex items-center gap-2">
+                                        <Settings className="w-3 h-3" />
+                                        設定を変更すると図案が自動更新されます
+                                    </p>
                                 </div>
-                                <div className="flex justify-between items-center bg-orange-50/30 p-2 rounded-xl">
-                                    <span className="text-orange-400">使用する布</span>
-                                    <span className="text-[#4e342e]">{settings.count} ct</span>
+
+                                {/* Size */}
+                                <div className="space-y-2">
+                                    <label className="text-xs font-bold text-orange-400">完成サイズ (cm)</label>
+                                    <div className="flex gap-2 items-center">
+                                        <input
+                                            type="number"
+                                            min="5"
+                                            max="50"
+                                            step="0.5"
+                                            value={settings.widthCm}
+                                            onChange={(e) => {
+                                                const newSettings = { ...settings, widthCm: parseFloat(e.target.value) };
+                                                setSettings(newSettings);
+                                                if (croppedImage) setTimeout(() => triggerProcess(croppedImage), 300);
+                                            }}
+                                            className="flex-1 px-3 py-2 border border-orange-200 rounded-xl text-sm font-bold text-[#4e342e] focus:border-[#ff8a65] focus:outline-none"
+                                        />
+                                        <span className="text-orange-300 font-bold">×</span>
+                                        <input
+                                            type="number"
+                                            min="5"
+                                            max="50"
+                                            step="0.5"
+                                            value={settings.heightCm}
+                                            onChange={(e) => {
+                                                const newSettings = { ...settings, heightCm: parseFloat(e.target.value) };
+                                                setSettings(newSettings);
+                                                if (croppedImage) setTimeout(() => triggerProcess(croppedImage), 300);
+                                            }}
+                                            className="flex-1 px-3 py-2 border border-orange-200 rounded-xl text-sm font-bold text-[#4e342e] focus:border-[#ff8a65] focus:outline-none"
+                                        />
+                                    </div>
                                 </div>
-                                <div className="flex justify-between items-center bg-orange-50/30 p-2 rounded-xl">
-                                    <span className="text-orange-400">色数</span>
-                                    <span className="text-[#ff8a65] font-black">{processedData.palette.length} 色</span>
+
+                                {/* Fabric Count */}
+                                <div className="space-y-2">
+                                    <div className="flex justify-between">
+                                        <label className="text-xs font-bold text-orange-400">使用する布</label>
+                                        <span className="text-[#4e342e] text-xs font-black">{settings.count} ct</span>
+                                    </div>
+                                    <input
+                                        type="range"
+                                        min="11"
+                                        max="32"
+                                        step="1"
+                                        value={settings.count}
+                                        onChange={(e) => {
+                                            const newSettings = { ...settings, count: parseInt(e.target.value) };
+                                            setSettings(newSettings);
+                                            if (croppedImage) setTimeout(() => triggerProcess(croppedImage), 300);
+                                        }}
+                                        className="w-full accent-[#ff8a65] cursor-pointer"
+                                    />
+                                </div>
+
+                                {/* Max Colors */}
+                                <div className="space-y-2">
+                                    <div className="flex justify-between">
+                                        <label className="text-xs font-bold text-orange-400">最大色数</label>
+                                        <span className="text-[#ff8a65] text-xs font-black">{settings.maxColors} 色</span>
+                                    </div>
+                                    <input
+                                        type="range"
+                                        min="10"
+                                        max="100"
+                                        step="5"
+                                        value={settings.maxColors}
+                                        onChange={(e) => {
+                                            const newSettings = { ...settings, maxColors: parseInt(e.target.value) };
+                                            setSettings(newSettings);
+                                            if (croppedImage) setTimeout(() => triggerProcess(croppedImage), 300);
+                                        }}
+                                        className="w-full accent-[#ff8a65] cursor-pointer"
+                                    />
+                                </div>
+
+                                {/* Current Values Display */}
+                                <div className="bg-orange-50/30 p-3 rounded-xl space-y-1 text-[10px]">
+                                    <div className="flex justify-between">
+                                        <span className="text-orange-400">ステッチ数</span>
+                                        <span className="text-[#4e342e] font-bold">
+                                            {Math.round((settings.widthCm / 2.54) * settings.count)} × {Math.round((settings.heightCm / 2.54) * settings.count)}
+                                        </span>
+                                    </div>
+                                    <div className="flex justify-between">
+                                        <span className="text-orange-400">実際の色数</span>
+                                        <span className="text-[#ff8a65] font-black">{processedData.palette.length} 色</span>
+                                    </div>
                                 </div>
 
                                 <div className="pt-4">
